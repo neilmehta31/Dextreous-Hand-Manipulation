@@ -7,7 +7,7 @@ from gym import spaces
 
 env = gym.make("HandManipulateBlock-v0")
 done, observation = False, env.reset()
-
+# THis is a test commit
 while True:
     env.render()
     action = env.action_space.sample()
