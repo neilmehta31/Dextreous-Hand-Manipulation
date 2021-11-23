@@ -207,7 +207,7 @@ while frame_idx < max_frames and not early_stop:
         state = torch.FloatTensor(state).to(device)
         state = torch.reshape(state, (1, 1, num_inputs))
         dist, value = model.forward(state)
-        action = dist.sample()
+        action = dist.sample().to(device)
         next_state, reward, done, _ = env.step(action.cpu().detach().numpy().ravel())
         # print("\n\ndone",done,i)
         next_state = next_state['observation']
@@ -218,8 +218,8 @@ while frame_idx < max_frames and not early_stop:
         
         log_probs.append(log_prob)
         values.append(value[0][0])
-        rewards.append(torch.FloatTensor([reward]))
-        masks.append(torch.FloatTensor([1 - done]))
+        rewards.append(torch.FloatTensor([reward]).to(device))
+        masks.append(torch.FloatTensor([1 - done]).to(device))
         
         states.append(state)
         actions.append(action)
@@ -247,11 +247,11 @@ while frame_idx < max_frames and not early_stop:
     # print("\n")
     # if np.shape(returns)[1] == 0:
     #     continue
-    returns   = torch.cat(returns).detach()
-    log_probs = torch.cat(log_probs).detach()
-    values    = torch.cat(values).detach()
-    states    = torch.cat(states)
-    actions   = torch.cat(actions)
+    returns   = torch.cat(returns).detach().to(device)
+    log_probs = torch.cat(log_probs).detach().to(device)
+    values    = torch.cat(values).detach().to(device)
+    states    = torch.cat(states).to(device)
+    actions   = torch.cat(actions).to(device)
     # print(f"returns shape : {returns.shape}\nvalues shape : {values.shape}\nrewards shape : {np.shape(rewards)}")
     # print(returns)
     # print("\n\n")
