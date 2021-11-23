@@ -65,9 +65,9 @@ value_output_size = 1     #Single output
 discount_factor = 0.998   #Discount factor Gamma
 gae_gamma = 0.95          #Generalized Advantage Estimation λ
 ppo_clipping_param = 0.2  #PPO clipping parameter
-num_steps        = 25
+num_steps        = 100
 mini_batch_size  = 5
-ppo_epochs       = 4
+ppo_epochs       = 40
 threshold_reward = -200 
 
 #Policy model
@@ -118,7 +118,7 @@ def plot(frame_idx, rewards):
     plt.plot(rewards)
     plt.show()
     
-def test_env(vis=False):
+def test_env(vis=True):
     state = env.reset()
     if vis: env.render()
     done = False
@@ -174,7 +174,7 @@ def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns,
             value_loss = (return_ - value).pow(2).mean()
 
             loss = 0.5 * value_loss + policy_loss - 0.001 * entropy
-            print(loss)
+            # print(loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -260,48 +260,48 @@ while frame_idx < max_frames and not early_stop:
     ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
     
 
-while True:
-    env.render()
-    observation, reward, done, info = env.step(action)
+# while True:
+#     env.render()
+#     observation, reward, done, info = env.step(action)
 
-    # We give the reward at timestamp t as the difference between the 
-    # rotation angles between the desired and the current/achieved otientation 
-    # before and after the transition, respectively.
-    obs = torch.Tensor(observation['observation'])
-    obs = torch.reshape(obs, (1, 1, 61))
-    # break
-    reward = observation["desired_goal"] - observation["achieved_goal"]
-    # print("\nobservations: ",obs)
-    # additional reward of +5 is given if the goal is achieved 
-    # within a tolerance of 0.4 rad
-    actions, value  = model.forward(obs)
+#     # We give the reward at timestamp t as the difference between the 
+#     # rotation angles between the desired and the current/achieved otientation 
+#     # before and after the transition, respectively.
+#     obs = torch.Tensor(observation['observation'])
+#     obs = torch.reshape(obs, (1, 1, 61))
+#     # break
+#     reward = observation["desired_goal"] - observation["achieved_goal"]
+#     # print("\nobservations: ",obs)
+#     # additional reward of +5 is given if the goal is achieved 
+#     # within a tolerance of 0.4 rad
+#     actions, value  = model.forward(obs)
 
-    # print("\n\nactions by NN :", actions.sample().detach().numpy().ravel())
-    # print("\n\nactions by NN :", actions.detach().numpy().ravel())
-    # action = actions.detach().numpy().ravel()
-    action = actions.sample().detach().numpy().ravel()
-    # print(action)
-    # exit()
+#     # print("\n\nactions by NN :", actions.sample().detach().numpy().ravel())
+#     # print("\n\nactions by NN :", actions.detach().numpy().ravel())
+#     # action = actions.detach().numpy().ravel()
+#     action = actions.sample().detach().numpy().ravel()
+#     # print(action)
+#     # exit()
 
-    if info["is_success"]==1.0 and observation["achieved_goal"]<0.4: # if np.array is obserbvation["achieved_goal"] then no need to change anything
-        reward+=5
+#     if info["is_success"]==1.0 and observation["achieved_goal"]<0.4: # if np.array is obserbvation["achieved_goal"] then no need to change anything
+#         reward+=5
 
-    # add the code for the condition when the object drops from the hand
-    # and give it a reward of -20
+#     # add the code for the condition when the object drops from the hand
+#     # and give it a reward of -20
     
-    # if object dropped:
-    #     reward-=20
+#     # if object dropped:
+#     #     reward-=20
 
-    rewards.append(reward)          #We append the reward value to the rewards 
-                                    #for future reference
+#     rewards.append(reward)          #We append the reward value to the rewards 
+#                                     #for future reference
 
-    # print(reward)
-    if done:
-        done_cntr+=1
-        # print("done")
-        env.reset()
-        if done_cntr==const.LIMIT_STEPS:
-            break
+#     # print(reward)
+#     if done:
+#         done_cntr+=1
+#         # print("done")
+#         env.reset()
+#         if done_cntr==const.LIMIT_STEPS:
+#             break
 
 # print(rewards)
 # print(np.shape(rewards))
