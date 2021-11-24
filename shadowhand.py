@@ -1,5 +1,7 @@
 """ShadowHand Environment Wrappers."""
 import os
+
+from numpy.core.shape_base import block
 import const
 from PIL import Image  # Will need to make sure PIL is installed
 import numpy as np
@@ -68,7 +70,8 @@ ppo_clipping_param = 0.2  #PPO clipping parameter
 num_steps        = 100
 mini_batch_size  = 5
 ppo_epochs       = 40
-threshold_reward = -200 
+threshold_reward = -200
+max_frames = 15000
 
 #Policy model
 def init_weights(m):
@@ -116,9 +119,10 @@ def plot(frame_idx, rewards):
     plt.subplot(131)
     plt.title('frame %s. reward: %s' % (frame_idx, rewards[-1]))
     plt.plot(rewards)
-    plt.show()
+    plt.show(block=False)
     
 def test_env(vis=True):
+    print("Running a test")
     state = env.reset()
     if vis: env.render()
     done = False
@@ -156,10 +160,12 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
         advantage = torch.reshape(advantage, (num_steps, 1, 1))
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
                 
-
+update_counter = 0
 def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, ppo_clipping_param=0.2):
+    global update_counter
+    update_counter+=1
     """ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, ppo_clipping_param=0.2"""
-    print("HOLAAAAAAA")
+    print("HOLAAAAAAA = ", update_counter)
     for _ in range(ppo_epochs):
         for state, action, old_log_probs, return_, advantage in ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantages):
             dist, value = model.forward(state)
@@ -179,10 +185,11 @@ def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns,
             loss.backward()
             optimizer.step()
 
+    print(loss)
+
 model = Policy_Value_NN().to(device)
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
-max_frames = 15000
 frame_idx  = 0
 test_rewards = []
 
@@ -193,6 +200,7 @@ state = env.reset()
 state = state['observation']
 early_stop = False
 i=0
+
 while frame_idx < max_frames and not early_stop:
 
     log_probs = []
@@ -220,7 +228,6 @@ while frame_idx < max_frames and not early_stop:
         values.append(value[0][0])
         rewards.append(torch.FloatTensor([reward]).to(device))
         masks.append(torch.FloatTensor([1 - done]).to(device))
-        
         states.append(state)
         actions.append(action)
         
@@ -228,13 +235,18 @@ while frame_idx < max_frames and not early_stop:
         frame_idx += 1
         
         if frame_idx % 1000 == 0:
-            test_reward = np.mean([test_env() for _ in range(10)])
+            test_reward = np.mean([test_env(False) for _ in range(10)])
             test_rewards.append(test_reward)
             plot(frame_idx, test_rewards)
-            if test_reward > threshold_reward: early_stop = True
+            if test_reward < threshold_reward: early_stop = True
+
+        # if done:
+        #     print("DONE")
+        #     env.reset()
+        #     break
             
 
-    next_state = torch.FloatTensor([next_state]).to(device)
+    next_state = torch.FloatTensor(next_state).to(device)
     next_state = torch.reshape(next_state, (1, 1, num_inputs))
     _, next_value = model.forward(next_state)
     # print("last mask shape : ", np.shape(masks[-1]))
@@ -305,3 +317,5 @@ while frame_idx < max_frames and not early_stop:
 
 # print(rewards)
 # print(np.shape(rewards))
+
+test_env()
