@@ -21,7 +21,7 @@ device   = torch.device("cuda" if use_cuda else "cpu")
 
 PATH = "./models/model_1.pth"
 load_model = False
-save_model = True
+save_model = False
 
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0")
@@ -69,7 +69,7 @@ num_steps        = 200
 mini_batch_size  = 64
 ppo_epochs       = 50
 threshold_reward = -200
-max_frames = 5000000
+max_frames = 5000
 
 #Policy model
 def init_weights(m):
@@ -100,8 +100,8 @@ class Policy_Value_NN(nn.Module):
 
     def forward(self, obs):
         obs = F.normalize(obs, dim = 2)
-        value = self.value_stack(obs)
-        value = self.LinV(value[0])                     #value[0] in order to ignore the second output(hidden and cell states)
+        value, _ = self.value_stack(obs)
+        value = self.LinV(value)                     #value[0] in order to ignore the second output(hidden and cell states)
         actions = self.policy_stack(obs)
         actions = self.LinP(actions[0])
         # std  = self.log_std.exp().expand_as(actions.cpu().detach())
@@ -124,7 +124,7 @@ def model_save(model):
 
 def model_load(model):
     model.load_state_dict(torch.load(PATH))
-    model.eval()
+    # model.eval()
 
 def test_env(rndr=True):
     print("Running a test")
@@ -198,6 +198,8 @@ def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns,
     print(f"Loss for this iteration = {loss.cpu().detach().numpy().ravel()[0]}")
 
 model = Policy_Value_NN().to(device)
+print(model)
+exit()
 if load_model:
     model_load(model)
 
@@ -253,6 +255,8 @@ while frame_idx < max_frames and not early_stop:
             test_rewards.append(test_reward)
             # plot(frame_idx, test_rewards)
             # if test_reward < threshold_reward: early_stop = True
+            if save_model:
+                model_save(model)
 
         # if done:
         #     print("DONE")
