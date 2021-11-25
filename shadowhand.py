@@ -2,13 +2,10 @@
 import os
 
 from numpy.core.shape_base import block
-import const
 from PIL import Image  # Will need to make sure PIL is installed
 import numpy as np
 import gym
 from gym import spaces
-import mss
-import cv2
 from matplotlib import pyplot as plt
 
 #Torch
@@ -16,10 +13,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Normal
+from torch.distributions import Normal, MultivariateNormal
 
 use_cuda = torch.cuda.is_available()
+# use_cuda = False
 device   = torch.device("cuda" if use_cuda else "cpu")
+
+PATH = "./models/model_1.pth"
+load_model = False
+save_model = True
 
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0")
@@ -29,16 +31,12 @@ done_cntr=0
 action = env.action_space.sample()
 observation, reward, done, info = env.step(action)
 
-# print("env.observation_space.shape :",np.array(np.shape(observation["observation"]))[0])
-# print("env.observation_space.shape :",np.array(np.shape(action))[0])
 num_inputs  = np.array(np.shape(observation["observation"]))[0] #61
 num_outputs = np.array(np.shape(action))[0]  #20
 
 
-# print("\nactionsize :", np.shape(action),"\naction :",action)
-
 """
-Hyperparameters used for PPO
+Hyperparameters used for PPO by OpenAI's implementation
 discount factor γ                   0.998
 Generalized Advantage Estimation λ  0.95
 entropy regularization coefficient  0.01
@@ -67,11 +65,11 @@ value_output_size = 1     #Single output
 discount_factor = 0.998   #Discount factor Gamma
 gae_gamma = 0.95          #Generalized Advantage Estimation λ
 ppo_clipping_param = 0.2  #PPO clipping parameter
-num_steps        = 100
-mini_batch_size  = 5
-ppo_epochs       = 40
+num_steps        = 200
+mini_batch_size  = 64
+ppo_epochs       = 50
 threshold_reward = -200
-max_frames = 15000
+max_frames = 5000000
 
 #Policy model
 def init_weights(m):
@@ -85,30 +83,29 @@ class Policy_Value_NN(nn.Module):
         self.policy_stack = nn.Sequential(
             nn.Linear(policy_input_size, dense_na),
             nn.ReLU(),
-            # nn.LSTM(dense_na, lstm_nh),
-            nn.Linear(dense_na, action_dist_size)
+            nn.LSTM(dense_na, lstm_nh, batch_first=True),
             )
 
         self.value_stack = nn.Sequential(
             nn.Linear(value_input_size, dense_na),
             nn.ReLU(),
-            # nn.LSTM(dense_na, lstm_nh),
-            nn.Linear(dense_na, 1)
+            nn.LSTM(dense_na, lstm_nh, batch_first=True)   
         )
+        self.LinV = nn.Linear(lstm_nh, 1)
+        self.LinP = nn.Linear(lstm_nh, action_dist_size)
 
         self.log_std = nn.Parameter(torch.ones(1, 1, num_outputs) * std)
-        self.apply(init_weights)
+        # self.apply(init_weights)
 
 
     def forward(self, obs):
         obs = F.normalize(obs, dim = 2)
         value = self.value_stack(obs)
+        value = self.LinV(value[0])                     #value[0] in order to ignore the second output(hidden and cell states)
         actions = self.policy_stack(obs)
-        # print(actions.cpu().detach())
-        # exit()
-        std  = self.log_std.exp().expand_as(actions.cpu().detach())
-        # print("actions :",actions)
-        dist = Normal(actions, std)
+        actions = self.LinP(actions[0])
+        # std  = self.log_std.exp().expand_as(actions.cpu().detach())
+        dist = Normal(actions, 0.1)
         return dist, value
 
 # model = Policy_Value_NN()
@@ -119,12 +116,21 @@ def plot(frame_idx, rewards):
     plt.subplot(131)
     plt.title('frame %s. reward: %s' % (frame_idx, rewards[-1]))
     plt.plot(rewards)
-    plt.show(block=False)
+    plt.show()
     
-def test_env(vis=True):
+
+def model_save(model):
+    torch.save(model.state_dict, PATH)
+
+def model_load(model):
+    model.load_state_dict(torch.load(PATH))
+    model.eval()
+
+def test_env(rndr=True):
     print("Running a test")
     state = env.reset()
-    if vis: env.render()
+    if rndr:
+        env.render()
     done = False
     total_reward = 0
     while not done:
@@ -132,7 +138,8 @@ def test_env(vis=True):
         dist, _ = model.forward(state)
         next_state, reward, done, _ = env.step(dist.sample().cpu().numpy().ravel())
         state = next_state
-        if vis: env.render()
+        if rndr:
+            env.render()
         total_reward += reward
     return total_reward
 
@@ -141,7 +148,6 @@ def compute_gae(next_value, rewards, masks, values, discount_factor=0.99, gae_ga
     """next_value, rewards, masks, values, discount_factor=0.998, gae_gamma=0.95"""
     # next_value = next_value.detach().numpy()
     values = values + [next_value]
-    # print('you gay',type(values[0]))
     gae = 0
     returns = []
     # print("\n\n (rewards): ",rewards[0].detach().numpy())
@@ -168,6 +174,7 @@ def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns,
     print("HOLAAAAAAA = ", update_counter)
     for _ in range(ppo_epochs):
         for state, action, old_log_probs, return_, advantage in ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantages):
+            # print(state.shape)
             dist, value = model.forward(state)
             entropy = dist.entropy().mean()
             new_log_probs = dist.log_prob(action)
@@ -184,11 +191,18 @@ def ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-    print(loss)
+    print(action[0])
+    # for name, param in model.named_parameters():
+    #     if param.requires_grad:
+    #         print (f"\n\n{name} : {param}")
+    print(f"Loss for this iteration = {loss.cpu().detach().numpy().ravel()[0]}")
 
 model = Policy_Value_NN().to(device)
+if load_model:
+    model_load(model)
+
 optimizer = optim.Adam(model.parameters(), lr=lr)
+
 
 frame_idx  = 0
 test_rewards = []
@@ -234,11 +248,11 @@ while frame_idx < max_frames and not early_stop:
         state = next_state
         frame_idx += 1
         
-        if frame_idx % 1000 == 0:
+        if frame_idx % 10000 == 0:
             test_reward = np.mean([test_env(False) for _ in range(10)])
             test_rewards.append(test_reward)
-            plot(frame_idx, test_rewards)
-            if test_reward < threshold_reward: early_stop = True
+            # plot(frame_idx, test_rewards)
+            # if test_reward < threshold_reward: early_stop = True
 
         # if done:
         #     print("DONE")
@@ -270,52 +284,13 @@ while frame_idx < max_frames and not early_stop:
     advantage = returns[:, 0, 0] - values[0]
 
     ppo_update(ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-    
 
-# while True:
-#     env.render()
-#     observation, reward, done, info = env.step(action)
 
-#     # We give the reward at timestamp t as the difference between the 
-#     # rotation angles between the desired and the current/achieved otientation 
-#     # before and after the transition, respectively.
-#     obs = torch.Tensor(observation['observation'])
-#     obs = torch.reshape(obs, (1, 1, 61))
-#     # break
-#     reward = observation["desired_goal"] - observation["achieved_goal"]
-#     # print("\nobservations: ",obs)
-#     # additional reward of +5 is given if the goal is achieved 
-#     # within a tolerance of 0.4 rad
-#     actions, value  = model.forward(obs)
 
-#     # print("\n\nactions by NN :", actions.sample().detach().numpy().ravel())
-#     # print("\n\nactions by NN :", actions.detach().numpy().ravel())
-#     # action = actions.detach().numpy().ravel()
-#     action = actions.sample().detach().numpy().ravel()
-#     # print(action)
-#     # exit()
+frames = [10000*i for i in range(len(rewards))]
+rewards = [i.cpu().detach().numpy().ravel() for i in rewards]
+plot(frames, rewards)
+[test_env() for _ in range(25)]
 
-#     if info["is_success"]==1.0 and observation["achieved_goal"]<0.4: # if np.array is obserbvation["achieved_goal"] then no need to change anything
-#         reward+=5
-
-#     # add the code for the condition when the object drops from the hand
-#     # and give it a reward of -20
-    
-#     # if object dropped:
-#     #     reward-=20
-
-#     rewards.append(reward)          #We append the reward value to the rewards 
-#                                     #for future reference
-
-#     # print(reward)
-#     if done:
-#         done_cntr+=1
-#         # print("done")
-#         env.reset()
-#         if done_cntr==const.LIMIT_STEPS:
-#             break
-
-# print(rewards)
-# print(np.shape(rewards))
-
-test_env()
+if save_model:
+    model_save(model)
