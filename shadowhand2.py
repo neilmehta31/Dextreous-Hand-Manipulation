@@ -20,9 +20,6 @@ use_cuda = torch.cuda.is_available()
 use_cuda = False
 device = torch.device("cuda" if use_cuda else "cpu")
 
-PATH = "./models/model_1.pth"
-load_model = False
-save_model = True
 
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0")
@@ -54,28 +51,15 @@ LSTM size                           512
 
 # HYPERPARAMETERS
 # Model
-lstm_nh = 512  # Hidden layer size in LSTM
-dense_na = 1024  # Size of dense hidden layer
-# policy_input_size = 61  # Policy network input size
-# value_input_size = 61  # Policy network input size
-# lr = 3e-4  # Adam optimizer learning rate
+lstm_nh = 64  # Hidden layer size in LSTM
+dense_na = 128  # Size of dense hidden layer
 action_dist_size = 20  # Action distribution size
 value_output_size = 1  # Single output
 
-# PPO
-# discount_factor = 0.998  # Discount factor Gamma
-# gae_gamma = 0.95  # Generalized Advantage Estimation λ
-# ppo_clipping_param = 0.2  # PPO clipping parameter
-# num_steps = 200
-# mini_batch_size = 64
-# ppo_epochs = 50
-# threshold_reward = -200
-# max_frames = 5000
-
 hyperparameters = {
-				'timesteps_per_batch': 512, 
+				'timesteps_per_batch': 200, 
 				'max_timesteps_per_episode': 200, 
-				'gamma': 0.99, 
+				'gamma': 0.99,                  
 				'n_updates_per_iteration': 10,
 				'lr': 3e-4, 
 				'clip': 0.2,

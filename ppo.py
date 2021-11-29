@@ -9,10 +9,7 @@ from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 
 
-PATH = "./models/model_2.pth"
-save_model = True
-def model_save(model):
-    torch.save(model.state_dict, PATH)
+
 
 class PPO:
 	"""
@@ -191,9 +188,6 @@ class PPO:
 				# If render is specified, render the environment
 				if self.render and (self.logger['i_so_far'] % self.render_every_i == 0) and len(batch_lens) == 0:
 					self.env.render()
-					if save_model:
-						model_save(model)
-					# pass
 
 				t += 1 # Increment timesteps ran this batch so far
 
