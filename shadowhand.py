@@ -99,6 +99,7 @@ class Policy_Value_NN(nn.Module):
         # self.apply(init_weights)
 
     def forward(self, obs):
+        print(obs)
         # obs = F.normalize(obs, dim=2)
         net, _ = self.net_stack(obs)
         value = self.LinV(net)

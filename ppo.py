@@ -1,9 +1,3 @@
-"""
-	The file contains the PPO class to train with.
-	NOTE: All "ALG STEP"s are following the numbers from the original PPO pseudocode.
-			It can be found here: https://spinningup.openai.com/en/latest/_images/math/e62a8971472597f4b014c2da064f636ffe365ba3.svg
-"""
-
 import gym
 import time
 
@@ -13,6 +7,12 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
+
+
+PATH = "./models/model_2.pth"
+save_model = True
+def model_save(model):
+    torch.save(model.state_dict, PATH)
 
 class PPO:
 	"""
@@ -191,18 +191,23 @@ class PPO:
 				# If render is specified, render the environment
 				if self.render and (self.logger['i_so_far'] % self.render_every_i == 0) and len(batch_lens) == 0:
 					self.env.render()
+					if save_model:
+						model_save(model)
+					# pass
 
 				t += 1 # Increment timesteps ran this batch so far
 
-				# Track observations in this batch
-				batch_obs.append(obs)
+				obs = obs['observation']
+				obs = torch.tensor(obs).reshape((1, 1, self.obs_dim)).float()
+				batch_obs.append(obs.reshape((self.obs_dim)))
 
 				# Calculate action and make a step in the env. 
 				# Note that rew is short for reward.
 				action, log_prob = self.get_action(obs)
-				obs, rew, done, _ = self.env.step(action)
+				obs, rew, done, _ = self.env.step(action.reshape((20)))
+				
 
-				# Track recent reward, action, and action log probability
+				# Track recent reward, action, and action log probablity
 				ep_rews.append(rew)
 				batch_acts.append(action)
 				batch_log_probs.append(log_prob)
@@ -216,10 +221,11 @@ class PPO:
 			batch_rews.append(ep_rews)
 
 		# Reshape data as tensors in the shape specified in function description, before returning
-		batch_obs = torch.tensor(batch_obs, dtype=torch.float)
+		batch_obs = torch.tensor([[t.numpy()] for t in batch_obs])
+		# batch_obs = torch.tensor(batch_obs, dtype=torch.float)
 		batch_acts = torch.tensor(batch_acts, dtype=torch.float)
 		batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
-		batch_rtgs = self.compute_rtgs(batch_rews)                                                              # ALG STEP 4
+		batch_rtgs = self.compute_rtgs(batch_rews)                               	# ALG STEP 4
 
 		# Log the episodic returns and episodic lengths in this batch.
 		self.logger['batch_rews'] = batch_rews
@@ -269,8 +275,7 @@ class PPO:
 				log_prob - the log probability of the selected action in the distribution
 		"""
 		# Query the actor network for a mean action
-		mean = self.actor(obs)
-
+		mean = self.actor.forward(obs)
 		# Create a distribution with the mean action and std from the covariance matrix above.
 		# For more information on how this distribution works, check out Andrew Ng's lecture on it:
 		# https://www.youtube.com/watch?v=JjB58InuTqM
@@ -278,6 +283,7 @@ class PPO:
 
 		# Sample an action from the distribution
 		action = dist.sample()
+		# print(action)
 
 		# Calculate the log probability for that action
 		log_prob = dist.log_prob(action)

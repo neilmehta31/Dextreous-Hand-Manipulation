@@ -3,6 +3,7 @@ import os
 
 from numpy.core.shape_base import block
 import numpy as np
+# from torch._C import TreeView
 import gym
 from gym import spaces
 from ppo import PPO
@@ -21,7 +22,7 @@ device = torch.device("cuda" if use_cuda else "cpu")
 
 PATH = "./models/model_1.pth"
 load_model = False
-save_model = False
+save_model = True
 
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0")
@@ -72,7 +73,7 @@ value_output_size = 1  # Single output
 # max_frames = 5000
 
 hyperparameters = {
-				'timesteps_per_batch': 2048, 
+				'timesteps_per_batch': 512, 
 				'max_timesteps_per_episode': 200, 
 				'gamma': 0.99, 
 				'n_updates_per_iteration': 10,
@@ -95,14 +96,14 @@ class PPO_model(nn.Module):
         self.Lin = nn.Linear(lstm_nh, nY)
 
     def forward(self, obs):
-        obs = F.normalize(obs)
+        # obs = F.normalize(obs)
         obs, _ = self.stack(obs)
         out = self.Lin(obs)
         return out
 
 model = PPO(policy_class=PPO_model, env=env, **hyperparameters)
 
-model.learn(total_timesteps=20000)
+model.learn(total_timesteps = 500000)
 
 # model = Policy_Value_NN()
 # print(model)
@@ -133,18 +134,19 @@ def test_env(rndr=True):
     total_reward = 0
     while not done:
         state = torch.FloatTensor([state["observation"]]).unsqueeze(0).to(device)
-        dist, _ = model.forward(state)
-        next_state, reward, done, _ = env.step(dist.sample().cpu().numpy().ravel())
+        action = model.actor.forward(state)
+        next_state, reward, done, _ = env.step(action.detach().cpu().numpy().ravel())
         state = next_state
         if rndr:
             env.render()
         total_reward += reward
     return total_reward
 
+print(model.actor)
 frames = [10000 * i for i in range(len(rewards))]
 rewards = [i.cpu().detach().numpy().ravel() for i in rewards]
 plot(frames, rewards)
-[test_env(False) for _ in range(25)]
+[test_env() for _ in range(25)]
 
 if save_model:
     model_save(model)
