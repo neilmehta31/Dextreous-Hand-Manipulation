@@ -1,3 +1,12 @@
+# DISCLAMER: The hyperparameters control how fast 
+# and convergent is the learning of parameters
+# Changing it above your cpu capacity may make 
+# the process to crash.😕
+
+# ⏹⏹⏹ Also make sure to increment the model 
+# number in the saving process so that you dont 
+# overwrite the previously saved model. 
+
 """ShadowHand Environment Wrappers."""
 import os
 
