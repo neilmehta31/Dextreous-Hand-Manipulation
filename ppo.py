@@ -8,17 +8,11 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 
-
-PATH = "./models/model_2.pth"
-save_model = True
-def model_save(model):
-    torch.save(model.state_dict, PATH)
-
 class PPO:
 	"""
 		This is the PPO class we will use as our model in main.py
 	"""
-	def __init__(self, policy_class, env, **hyperparameters):
+	def __init__(self, policy_class, env, load_model=False, **hyperparameters):
 		"""
 			Initializes the PPO model, including hyperparameters.
 
@@ -43,8 +37,13 @@ class PPO:
 		self.act_dim = env.action_space.shape[0]
 
 		 # Initialize actor and critic networks
-		self.actor = policy_class(self.obs_dim, self.act_dim)                                                   # ALG STEP 1
+		self.actor = policy_class(self.obs_dim, self.act_dim) 	 # ALG STEP 1
 		self.critic = policy_class(self.obs_dim, 1)
+		if load_model:											# Loading the pretarined model
+			print("Loading a pre-made model...", end="")
+			self.actor.load_state_dict(torch.load('./ppo_actor.pth'))
+			self.critic.load_state_dict(torch.load('./ppo_critic.pth'))
+			print("Finished Loading")
 
 		# Initialize optimizers for actor and critic
 		self.actor_optim = Adam(self.actor.parameters(), lr=self.lr)
@@ -191,9 +190,6 @@ class PPO:
 				# If render is specified, render the environment
 				if self.render and (self.logger['i_so_far'] % self.render_every_i == 0) and len(batch_lens) == 0:
 					self.env.render()
-					if save_model:
-						model_save(model)
-					# pass
 
 				t += 1 # Increment timesteps ran this batch so far
 
@@ -221,11 +217,12 @@ class PPO:
 			batch_rews.append(ep_rews)
 
 		# Reshape data as tensors in the shape specified in function description, before returning
-		batch_obs = torch.tensor([[t.numpy()] for t in batch_obs])
-		# batch_obs = torch.tensor(batch_obs, dtype=torch.float)
-		batch_acts = torch.tensor(batch_acts, dtype=torch.float)
-		batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
-		batch_rtgs = self.compute_rtgs(batch_rews)                               	# ALG STEP 4
+		batch_obs = torch.stack(batch_obs).reshape((len(batch_obs), 1, self.obs_dim))
+		# print(batch_acts)
+		# exit()
+		batch_acts = torch.tensor(np.array(batch_acts))
+		batch_log_probs = torch.stack(batch_log_probs)
+		batch_rtgs = self.compute_rtgs(np.array(batch_rews))                               	# ALG STEP 4
 
 		# Log the episodic returns and episodic lengths in this batch.
 		self.logger['batch_rews'] = batch_rews
