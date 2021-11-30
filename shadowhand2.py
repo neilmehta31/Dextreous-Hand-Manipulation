@@ -12,6 +12,7 @@ import os
 
 from numpy.core.shape_base import block
 import numpy as np
+
 # from torch._C import TreeView
 import gym
 from gym import spaces
@@ -29,7 +30,6 @@ use_cuda = torch.cuda.is_available()
 use_cuda = False
 device = torch.device("cuda" if use_cuda else "cpu")
 
-
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0")
 done, observation = False, env.reset()
@@ -38,8 +38,8 @@ done_cntr = 0
 action = env.action_space.sample()
 observation, reward, done, info = env.step(action)
 
-num_inputs = np.array(np.shape(observation["observation"]))[0]   # 61
-num_outputs = np.array(np.shape(action))[0]                      # 20
+num_inputs = np.array(np.shape(observation["observation"]))[0]  # 61
+num_outputs = np.array(np.shape(action))[0]  # 20
 
 
 """
@@ -84,7 +84,7 @@ class PPO_model(nn.Module):
         self.stack = nn.Sequential(
             nn.Linear(nX, dense_na),
             nn.ReLU(),
-            nn.LSTM(dense_na, lstm_nh, batch_first=True)
+            nn.LSTM(dense_na, lstm_nh, batch_first=True),
         )
         self.Lin = nn.Linear(lstm_nh, nY)
 
@@ -94,9 +94,16 @@ class PPO_model(nn.Module):
         out = self.Lin(obs)
         return out
 
-model = PPO(policy_class=PPO_model, env=env, **hyperparameters)
+load_model = True       # load model from the desired pathfile
+extra_train = True     # Toggle for more training
 
-model.learn(total_timesteps = 500000)
+
+model = PPO(policy_class=PPO_model, env=env, load_model=load_model, **hyperparameters)
+
+if load_model and not extra_train:
+    pass
+else:
+    model.learn(total_timesteps=500000)
 
 # model = Policy_Value_NN()
 # print(model)
@@ -113,7 +120,7 @@ def model_save(model):
     torch.save(model.state_dict, PATH)
 
 
-def model_load(model):
+def model_load():
     model.load_state_dict(torch.load(PATH))
     # model.eval()
 
@@ -135,11 +142,12 @@ def test_env(rndr=True):
         total_reward += reward
     return total_reward
 
+
 print(model.actor)
 frames = [10000 * i for i in range(len(rewards))]
 rewards = [i.cpu().detach().numpy().ravel() for i in rewards]
 plot(frames, rewards)
-[test_env() for _ in range(25)]
+[test_env() for _ in range(15)]
 
 if save_model:
-    model_save(model)
+    model_save(model.actor)
