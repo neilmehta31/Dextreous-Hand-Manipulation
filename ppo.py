@@ -188,6 +188,7 @@ class PPO:
 			# Run an episode for a maximum of max_timesteps_per_episode timesteps
 			for ep_t in range(self.max_timesteps_per_episode):
 				# If render is specified, render the environment
+
 				if self.render and (self.logger['i_so_far'] % self.render_every_i == 0) and len(batch_lens) == 0:
 					self.env.render()
 
@@ -197,14 +198,14 @@ class PPO:
 				obs = torch.tensor(obs).reshape((1, 1, self.obs_dim)).float()
 				batch_obs.append(obs.reshape((self.obs_dim)))
 
-				# Calculate action and make a step in the env. 
+				# Calculate action and make a step in the env.
 				# Note that rew is short for reward.
 				action, log_prob = self.get_action(obs)
 				obs, rew, done, _ = self.env.step(action.reshape((20)))
 				
 
 				# Track recent reward, action, and action log probablity
-				ep_rews.append(rew)
+				ep_rews.append(rew+np.mean(obs['desired_goal'] - obs['achieved_goal']))
 				batch_acts.append(action)
 				batch_log_probs.append(log_prob)
 
@@ -218,8 +219,6 @@ class PPO:
 
 		# Reshape data as tensors in the shape specified in function description, before returning
 		batch_obs = torch.stack(batch_obs).reshape((len(batch_obs), 1, self.obs_dim))
-		# print(batch_acts)
-		# exit()
 		batch_acts = torch.tensor(np.array(batch_acts))
 		batch_log_probs = torch.stack(batch_log_probs)
 		batch_rtgs = self.compute_rtgs(np.array(batch_rews))                               	# ALG STEP 4
@@ -253,6 +252,7 @@ class PPO:
 			# discounted return (think about why it would be harder starting from the beginning)
 			for rew in reversed(ep_rews):
 				discounted_reward = rew + discounted_reward * self.gamma
+				print((discounted_reward))
 				batch_rtgs.insert(0, discounted_reward)
 
 		# Convert the rewards-to-go into a tensor
@@ -338,9 +338,9 @@ class PPO:
 		self.clip = 0.2                                 # Recommended 0.2, helps define the threshold to clip the ratio during SGA
 
 		# Miscellaneous parameters
-		self.render = False                              # If we should render during rollout
-		self.render_every_i = 10                        # Only render every n iterations
-		self.save_freq = 10                             # How often we save in number of iterations
+		self.render = True                              # If we should render during rollout
+		self.render_every_i = 100                        # Only render every n iterations
+		self.save_freq = 100                            # How often we save in number of iterations
 		self.seed = None                                # Sets the seed of our program, used for reproducibility of results
 
 		# Change any default values to custom values for specified hyperparameters
