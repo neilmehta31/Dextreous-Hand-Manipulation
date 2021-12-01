@@ -4,7 +4,6 @@ import os
 from numpy.core.shape_base import block
 import numpy as np
 
-# from torch._C import TreeView
 import gym
 from gym import spaces
 from ppo import PPO
@@ -26,16 +25,21 @@ load_model = False
 save_model = True
 
 # Initialising the environment
-env = gym.make("HandManipulateBlock-v0")
+env = gym.make("HandManipulateBlock-v0", reward_type="dense")
+env.rotation_threshold = 0.4
+env.distance_threshold = 0.01
+env.relative_control = True
+
 done, observation = False, env.reset()
 rewards = []
 done_cntr = 0
 action = env.action_space.sample()
 observation, reward, done, info = env.step(action)
 
-num_inputs = np.array(np.shape(observation["observation"]))[0]  # 61
+obs_inputs = np.array(np.shape(observation["observation"]))[0]  # 61
 num_outputs = np.array(np.shape(action))[0]  # 20
-
+goal_size = np.array(np.shape(observation["desired_goal"]))[0]
+num_inputs = obs_inputs + goal_size
 
 """
 Hyperparameters used for PPO by OpenAI's implementation
@@ -74,15 +78,37 @@ value_output_size = 1  # Single output
 # max_frames = 5000
 
 hyperparameters = {
-    "timesteps_per_batch": 512,
+    "timesteps_per_batch": 500,
     "max_timesteps_per_episode": 200,
-    "gamma": 0.99,
+    "gamma": 0.95,
     "n_updates_per_iteration": 10,
     "lr": 3e-4,
     "clip": 0.2,
-    "render": True,
-    "render_every_i": 10,
+    "render": False,
+    "render_every_i": 1,
 }
+
+def test_env(rndr=True):
+    print("Running a test")
+    obs = env.reset()
+    if rndr:
+        env.render()
+    done = False
+    total_reward = 0
+    while not done:
+        obs = np.concatenate(
+                    [
+                        np.reshape(obs["observation"], (61)),
+                        np.reshape(obs["desired_goal"], (7)),
+                    ]
+                )
+        obs = torch.tensor(obs).reshape((1, 1, num_inputs)).float()        
+        action, _ = model.get_action(obs)
+        obs, reward, done, _ = env.step(action.reshape((20)))
+        if rndr:
+            env.render()
+        total_reward += reward
+    return total_reward
 
 # Actor and Critic models
 class PPO_model(nn.Module):
@@ -101,60 +127,16 @@ class PPO_model(nn.Module):
         out = self.Lin(obs)
         return out
 
-load_model = True       # load model from the desired pathfile
-extra_train = True     # Toggle for more training
 
+load_model = False  # load model from the desired pathfile
+extra_train = False  # Toggle for more training
 
 model = PPO(policy_class=PPO_model, env=env, load_model=load_model, **hyperparameters)
 
 if load_model and not extra_train:
-    pass
+    [test_env() for _ in range(15)]
+    exit()
 else:
-    model.learn(total_timesteps=500000)
-
-# model = Policy_Value_NN()
-# print(model)
-def plot(frame_idx, rewards):
-    # clear_output(True)
-    # plt.figure(figsize=(20,5))
-    # plt.subplot(131)
-    plt.title(f"Total frames = {len(frame_idx)}")
-    plt.plot(rewards)
-    plt.show()
-
-
-def model_save(model):
-    torch.save(model.state_dict, PATH)
-
-
-def model_load():
-    model.load_state_dict(torch.load(PATH))
-    # model.eval()
-
-
-def test_env(rndr=True):
-    print("Running a test")
-    state = env.reset()
-    if rndr:
-        env.render()
-    done = False
-    total_reward = 0
-    while not done:
-        state = torch.FloatTensor([state["observation"]]).unsqueeze(0).to(device)
-        action = model.actor.forward(state)
-        next_state, reward, done, _ = env.step(action.detach().cpu().numpy().ravel())
-        state = next_state
-        if rndr:
-            env.render()
-        total_reward += reward
-    return total_reward
-
+    model.learn(total_timesteps=1250)
 
 print(model.actor)
-frames = [10000 * i for i in range(len(rewards))]
-rewards = [i.cpu().detach().numpy().ravel() for i in rewards]
-plot(frames, rewards)
-[test_env() for _ in range(15)]
-
-if save_model:
-    model_save(model.actor)

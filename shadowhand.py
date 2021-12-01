@@ -25,7 +25,11 @@ load_model = False
 save_model = False
 
 # Initialising the environment
-env = gym.make("HandManipulateBlock-v0")
+env = gym.make("HandManipulateBlock-v0", reward_type="dense")
+env.rotation_threshold = 0.4
+env.distance_threshold = 0.04
+env.relative_control = True
+
 done, observation = False, env.reset()
 rewards = []
 done_cntr = 0
@@ -70,7 +74,7 @@ num_steps = 200
 mini_batch_size = 64
 ppo_epochs = 50
 threshold_reward = -200
-max_frames = 5000
+max_frames = 50000
 
 # Policy model
 def init_weights(m):
@@ -99,15 +103,14 @@ class Policy_Value_NN(nn.Module):
         # self.apply(init_weights)
 
     def forward(self, obs):
-        print(obs)
         # obs = F.normalize(obs, dim=2)
         net, _ = self.net_stack(obs)
         value = self.LinV(net)
         # actions = self.policy_stack(obs)
         actions = self.LinP(net)
         # std  = self.log_std.exp().expand_as(actions.cpu().detach())
-        # dist = Normal(actions, 0.1)
-        return actions, value
+        dist = Normal(actions, 0.1)
+        return dist, value
 
 
 # model = Policy_Value_NN()
@@ -223,7 +226,7 @@ def ppo_update(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-    print(action[0])
+    # print(action[0])
     # for name, param in model.named_parameters():
     #     if param.requires_grad:
     #         print (f"\n\n{name} : {param}")
