@@ -1,3 +1,12 @@
+# DISCLAMER: The hyperparameters control how fast 
+# and convergent is the learning of parameters
+# Changing it above your cpu capacity may make 
+# the process to crash.😕
+
+# ⏹⏹⏹ Also make sure to increment the model 
+# number in the saving process so that you dont 
+# overwrite the previously saved model. 
+
 """ShadowHand Environment Wrappers."""
 import os
 
@@ -19,10 +28,6 @@ from torch.distributions import Normal, MultivariateNormal
 use_cuda = torch.cuda.is_available()
 use_cuda = False
 device = torch.device("cuda" if use_cuda else "cpu")
-
-PATH = "./model_2.pth"
-load_model = False
-save_model = True
 
 # Initialising the environment
 env = gym.make("HandManipulateBlock-v0", reward_type="dense")
@@ -59,23 +64,10 @@ LSTM size                           512
 
 # HYPERPARAMETERS
 # Model
-lstm_nh = 512  # Hidden layer size in LSTM
-dense_na = 1024  # Size of dense hidden layer
-# policy_input_size = 61  # Policy network input size
-# value_input_size = 61  # Policy network input size
-# lr = 3e-4  # Adam optimizer learning rate
+lstm_nh = 64  # Hidden layer size in LSTM
+dense_na = 128  # Size of dense hidden layer
 action_dist_size = 20  # Action distribution size
 value_output_size = 1  # Single output
-
-# PPO
-# discount_factor = 0.998  # Discount factor Gamma
-# gae_gamma = 0.95  # Generalized Advantage Estimation λ
-# ppo_clipping_param = 0.2  # PPO clipping parameter
-# num_steps = 200
-# mini_batch_size = 64
-# ppo_epochs = 50
-# threshold_reward = -200
-# max_frames = 5000
 
 hyperparameters = {
     "timesteps_per_batch": 500,
